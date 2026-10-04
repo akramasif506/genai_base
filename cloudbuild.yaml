@@ -1,0 +1,34 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+  
+steps:
+  -name: 'python:3.12-slim'
+   entryoint : bash
+   args: ['-c', 'pip install requirements.txt && pytest test_start_build_process.py -v && python test_start_build_process.py']
+   
+  -name: 'gcr.io/cloud-builders/docker'
+   args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base', '.']
+   
+  -name: 'gcr.io/cloud-builders/docker'
+   args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base']
+   
+  -name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+   entryoint: gcloud
+   args:
+    - 'run'
+    - 'jobs'
+    - 'deploy'
+    - 'job-genai-base'
+    - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base'
+    - '--region=us-central1'
+  
+  -name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+   entryoint: gcloud
+   args: ['run','jobs','execute','job-genai-base','--region=us-central1','--wait']
+  
+  -name: 'python:3.12-slim'
+   entryoint: bash 
+   args: ['-c', 'pytest test_end_build_process.py -v && python test_end_build_process.py']
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base'

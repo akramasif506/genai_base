@@ -1,0 +1,11 @@
+pytest
+google
+numpy
+vertexai
+json
+sentence_transformers
+logging
+ast
+fastapi
+pydantic
+uuid

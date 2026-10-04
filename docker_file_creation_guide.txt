@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+### Base image. Must be the first instruction.
+
+
+WORKDIR /app
+
+### Sets working directory for everything after it.
+
+COPY requirements.txt .
+
+### Copies files from your machine into the image. this time only copied requirements.txt because pip install command run only once. 
+    otherwise if any issue while copying the full packge need to fix the pip install again and again.
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+### running command/
+
+COPY . .
+
+### copy everything
+
+CMD ["python", "app.py"]
+
+### Default command when a container starts. or command to run the process.
+	Ex : uvicorn fast_api:app --reload
+		CMD ["uvicorn", "fast_api:app", "--reload"]

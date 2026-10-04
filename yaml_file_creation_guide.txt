@@ -1,0 +1,93 @@
+options:
+  logging: CLOUD_LOGGING_ONLY   # REQUIRED whenever a custom --service-account is used
+
+steps:
+  - name: 'python:3.12-slim'
+    entrypoint: bash
+    args: ['-c', 'pip install -r requirements.txt && pytest test_app.py -v']
+	
+	## In thise step the requirements.txt file will install all dependent lib. pip install -r requirements.txt
+	## next it will run pytest for simple test of python script. If this basic step fail than whole deployment process will step.
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/REPO_NAME/JOB_NAME', '.']
+	
+	### The name is fixed cannot change 'gcr.io/cloud-builders/docker'
+	### Here docker will build the package. and while building package it set the expected target path to push the package which is next step.
+	### $PROJECT_ID is the project ID pulled from environment variable automatically.
+		comand to check the value echo $PROJECT_ID
+		command to set value manually PROJECT_ID=$(gcloud config get-value project)
+		
+	### here REPO_NAME is the artifcatory repository where the the package need to push. 
+	### JOB_NAME is the image name can be any name but need to consistent with throught the below commands.
+	### the part us-central1-docker.pkg.dev/$PROJECT_ID/REPO_NAME/ is stict format can not be changed.
+	
+	### check the existing artifcatory repository:
+		gcloud artifacts repositories list --location=us-central1 --limit=1
+		
+	### create artifcatory repo if does not exist:
+		gcloud artifacts repositories create artifact-repo-genai-base --repository-format=docker --location=us-central1
+	
+	### final path , the name "image_name_genai_base" can be any name.
+		us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/REPO_NAME/JOB_NAME']
+	
+	### This step is to push the package into artifactory repo which is build in above step.
+	### The name and the path is same
+	
+	
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: ['run','jobs','deploy','JOB_NAME',
+           '--image=us-central1-docker.pkg.dev/$PROJECT_ID/REPO_NAME/JOB_NAME',
+           '--region=REGION']
+	
+	### Attaching a job to the image.
+	### This step is optional in .yaml file if we don't want to run the image for every git push.
+	### Check the existing job 
+		gcloud run jobs list --region=us-central1
+	
+	### Creating a JOB if required. No need to run this manually docker will do this
+		gcloud run jobs create job-genai-base --image=us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base --region=us-central1
+		
+		or 
+		
+		gcloud run jobs deploy job-genai-base --image=us-central1-docker.pkg.dev/$PROJECT_ID/artifact-repo-genai-base/image_name_genai_base --region=us-central1
+		
+		
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: ['run','jobs','execute','JOB_NAME','--region=REGION','--wait']
+	
+	### Run the JOB that created/deployed job which is created in above. in every push just to test whether code runs. To confirm no error due to change.
+	### This will not added of running job everytime impating something or need to run only in specific time. ex : writing data .
+	### Otherwise this command can be use to run the job manually or by scheduler.
+	
+	### example Command:
+		run jobs execute job-genai-base --region=us-central1
+		
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/REPO_NAME/JOB_NAME'
+  
+  ### This step need to record for which image the process is build. for tracking, logging.
+  ### the output of the command "gcloud builds list --region=REGION --limit=5 --sort-by=~createTime" will have the buid id also image name it worked for.
+  ### If in our .yaml steps "push" is not there than "images:" will push the
+  ### Conclusion : Step "images:" will tell for which image the build completed so that "build list" command can have image name
+  
+	
+==============================END OF YAML==================================
+
+### image vs container.
+
+	when the code package is build by docker it is image.
+	when the same image is in running stage it is container.
+	
+	docker build  → creates the IMAGE
+	docker push   → stores the IMAGE in Artifact Registry
+	jobs deploy   → tells Cloud Run which IMAGE to use
+	jobs execute  → Cloud Run starts a CONTAINER from that image, runs CMD, then the container exits
